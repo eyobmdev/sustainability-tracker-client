@@ -2,6 +2,9 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useSelector } from 'react-redux';
+import { selectCompanyId, selectDepartmentId } from '../auth/authSlice';
+
 import { ENERGY } from '../../api/endpoints';
 import DataSubmissionTemplate from './DataSubmissionTemplate';
 import Input, { Select } from '../../components/ui/Input';
@@ -13,20 +16,81 @@ const schema = z.object({
   date: z.string().min(1, 'Date is required'),
 });
 
-const SOURCES = ['SOLAR', 'WIND', 'HYDRO', 'BIOMASS', 'GRID', 'DIESEL', 'NATURAL_GAS', 'OTHER'];
+const SOURCES = ['SOLAR', 'WIND', 'HYDRO', 'BIOMASS','DIESEL', 'NATURAL_GAS', 'OTHER'];
 
 const EnergyPage = () => {
   const form = useForm({ resolver: zodResolver(schema) });
 
+  // Get auth data from Redux
+  const companyId = useSelector(selectCompanyId);
+  const departmentId = useSelector(selectDepartmentId);
+
+  const onSubmit = async (data: any) => {
+    if (!companyId || !departmentId) {
+      alert("Company or Department information is missing. Please login again.");
+      return;
+    }
+
+    const renewableKwh = data.renewablePercent 
+      ? Math.round((data.energyKwh * data.renewablePercent) / 100 * 100) / 100   // 2 decimal precision
+      : null;
+
+    const payload = {
+      companyId: companyId,
+      departmentId: departmentId,
+      totalKwh: data.energyKwh,
+      renewableKwh: renewableKwh,
+      sourceType: data.energySource,
+      recordedAt: data.date,
+      notes: "", 
+    };
+
+    return payload;   // This will be sent by DataSubmissionTemplate
+  };
+
   const formFields = (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <Input label="Energy Consumed (kWh)" type="number" step="0.01" placeholder="0.00" required error={form.formState.errors.energyKwh?.message} {...form.register('energyKwh')} />
-      <Select label="Energy Source" required error={form.formState.errors.energySource?.message} {...form.register('energySource')}>
+      <Input 
+        label="Energy Consumed (kWh)" 
+        type="number" 
+        step="0.01" 
+        placeholder="0.00" 
+        required 
+        error={form.formState.errors.energyKwh?.message} 
+        {...form.register('energyKwh')} 
+      />
+      
+      <Select 
+        label="Energy Source" 
+        required 
+        error={form.formState.errors.energySource?.message} 
+        {...form.register('energySource')}
+      >
         <option value="">Select source</option>
-        {SOURCES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+        {SOURCES.map((s) => (
+          <option key={s} value={s}>
+            {s.replace(/_/g, ' ')}
+          </option>
+        ))}
       </Select>
-      <Input label="Renewable %" type="number" min="0" max="100" placeholder="0–100" error={form.formState.errors.renewablePercent?.message} {...form.register('renewablePercent')} />
-      <Input label="Date" type="date" required error={form.formState.errors.date?.message} {...form.register('date')} />
+
+      <Input 
+        label="Renewable %" 
+        type="number" 
+        min="0" 
+        max="100" 
+        placeholder="0–100" 
+        error={form.formState.errors.renewablePercent?.message} 
+        {...form.register('renewablePercent')} 
+      />
+      
+      <Input 
+        label="Date" 
+        type="date" 
+        required 
+        error={form.formState.errors.date?.message} 
+        {...form.register('date')} 
+      />
     </div>
   );
 
@@ -37,9 +101,13 @@ const EnergyPage = () => {
       formFields={formFields}
       endpoints={ENERGY}
       columns={['energyKwh', 'energySource', 'renewablePercent']}
-      columnLabels={{ energyKwh: 'Energy (kWh)', energySource: 'Source', renewablePercent: 'Renewable %' }}
+      columnLabels={{
+        energyKwh: 'Energy (kWh)',
+        energySource: 'Source',
+        renewablePercent: 'Renewable %'
+      }}
       register={form.register}
-      handleSubmit={form.handleSubmit}
+      handleSubmit={form.handleSubmit(onSubmit)}   // ← Transformed submit
       reset={form.reset}
       formState={form.formState}
     />
